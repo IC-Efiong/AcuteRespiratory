@@ -3,3 +3,4 @@ numpy
 scikit-learn
 fuzzy-c-means
 matplotlib
+fcmeans.main
