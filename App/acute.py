@@ -3,14 +3,27 @@ import numpy as np
 import pickle
 import pandas as pd
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from fcmeans import FCM
+from skfuzzy import cmeans
+# from skfuzzy import control as ctrl
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 # Load your trained model
-model = pickle.load(open('App/trained_model.pkl', 'rb'))
+# model = pickle.load(open('App/trained_model.pkl', 'rb'))
 # Load pre-trained FCM model
-fcm_model = pickle.load(open('App/fcm_model.pkl', 'rb'))
+# fcm_model = pickle.load(open('App/fcm_model.pkl', 'rb'))
+
+try:
+    # ✨ CORRECTION: Ensure these paths are correct
+    model = pickle.load(open('App/trained_model.pkl', 'rb'))
+    # ✨ CORRECTION: Modified FCM model loading approach
+    fcm_data = pickle.load(open('App/fcm_model.pkl', 'rb'))
+except FileNotFoundError as e:
+    st.error(f"Model file not found: {e}")
+    st.stop()
+except Exception as e:
+    st.error(f"Error loading models: {e}")
+    st.stop()
 
 
 diagnosis_mapping = {
@@ -68,21 +81,28 @@ diagnosis_mapping = {
 }
 
 # Function to predict the cluster
-def predict_cluster(input_data, fcm):
+def predict_cluster(input_data, fcm_model):
     try:
-        # Fit a scaler on the input data (for the web app's new data)
         scaler = StandardScaler()
         input_scaled = scaler.fit_transform(np.array(input_data).reshape(1, -1))
-
-        # Predict cluster membership using the FCM model
-        membership = fcm.predict(input_scaled)
         
-        # Find the predicted cluster (the one with the highest membership value)
+        # Use centers from model dictionary
+        centers = fcm_model['centers']
+        m = fcm_model.get('m', 2)  # default fuzzy coefficient
+        
+        # Compute distances
+        distances = np.linalg.norm(input_scaled - centers, axis=1)
+        
+        # Compute membership with fuzzy coefficient
+        membership = (1 / (distances ** (2 / (m - 1))))
+        membership = membership / membership.sum() * 100
+        
         predicted_cluster = np.argmax(membership)
+        
         return predicted_cluster, membership
     except Exception as e:
-        return None, str(e)
-
+        st.error(f"Cluster prediction error: {e}")
+        return None, None
 # App title
 st.title("Respiratory Prediction System")
 
@@ -188,7 +208,7 @@ elif menu == "Fuzzy C-mean Cluster":
     
     # Button to predict the cluster
     if st.button("Predict Cluster"):
-        cluster, membership = predict_cluster(new_data_point, fcm_model)
+        cluster, membership = predict_cluster(new_data_point, fcm_data)
         if cluster is not None:
         # Check if membership is a 1D array or a single value
             if isinstance(membership, np.ndarray) and membership.ndim == 2:
